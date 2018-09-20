@@ -335,22 +335,22 @@ public class LocalVpnService extends VpnService implements Runnable {
                 // 转发给本地UDP服务器
                 ipHeader.setSourceIP(ipHeader.getDestinationIP());
                 ipHeader.setDestinationIP(LOCAL_IP);
-                udpHeader.setDestinationPort(m_TcpProxyServer.Port);
+                udpHeader.setDestinationPort(m_UdpProxyServer.Port);
 
                 CommonMethods.ComputeUDPChecksum(ipHeader, udpHeader);
                 m_VPNOutputStream.write(ipHeader.m_Data, ipHeader.m_Offset, size);
                 session.BytesSent += udpDataSize;//注意顺序
                 m_SentBytes += size;
                 // 转发DNS数据包：
-                udpHeader.m_Offset = ipHeader.getHeaderLength();
-                if (ipHeader.getSourceIP() == LOCAL_IP && udpHeader.getDestinationPort() == 53) {
-                    m_DNSBuffer.clear();
-                    m_DNSBuffer.limit(ipHeader.getDataLength() - 8);
-                    DnsPacket dnsPacket = DnsPacket.FromBytes(m_DNSBuffer);
-                    if (dnsPacket != null && dnsPacket.Header.QuestionCount > 0) {
-                        m_DnsProxy.onDnsRequestReceived(ipHeader, udpHeader, dnsPacket);
-                    }
-                }
+//                udpHeader.m_Offset = ipHeader.getHeaderLength();
+//                if (ipHeader.getSourceIP() == LOCAL_IP && udpHeader.getDestinationPort() == 53) {
+//                    m_DNSBuffer.clear();
+//                    m_DNSBuffer.limit(ipHeader.getDataLength() - 8);
+//                    DnsPacket dnsPacket = DnsPacket.FromBytes(m_DNSBuffer);
+//                    if (dnsPacket != null && dnsPacket.Header.QuestionCount > 0) {
+//                        m_DnsProxy.onDnsRequestReceived(ipHeader, udpHeader, dnsPacket);
+//                    }
+//                }
                 break;
         }
     }
