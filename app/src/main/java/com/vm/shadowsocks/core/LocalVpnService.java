@@ -43,6 +43,7 @@ public class LocalVpnService extends VpnService implements Runnable {
     private Thread m_VPNThread;
     private ParcelFileDescriptor m_VPNInterface;
     private TcpProxyServer m_TcpProxyServer;
+    private UdpProxyServer m_UdpProxyServer;
     private DnsProxy m_DnsProxy;
     private FileOutputStream m_VPNOutputStream;
 
@@ -188,6 +189,10 @@ public class LocalVpnService extends VpnService implements Runnable {
             m_TcpProxyServer.start();
             writeLog("LocalTcpServer started.");
 
+            m_UdpProxyServer = new UdpProxyServer(0);
+            m_UdpProxyServer.start();
+            writeLog("LocalUdpServer started.");
+
             m_DnsProxy = new DnsProxy();
             m_DnsProxy.start();
             writeLog("LocalDnsProxy started.");
@@ -199,7 +204,7 @@ public class LocalVpnService extends VpnService implements Runnable {
                     writeLog("set shadowsocks/(http proxy)");
                     try {
                         ProxyConfig.Instance.m_ProxyList.clear();
-                        ProxyConfig.Instance.addProxyToList(ProxyUrl);
+//                        ProxyConfig.Instance.addProxyToList(ProxyUrl);
                         writeLog("Proxy is: %s", ProxyConfig.Instance.getDefaultProxy());
                     } catch (Exception e) {
                         ;
@@ -312,8 +317,31 @@ public class LocalVpnService extends VpnService implements Runnable {
                 }
                 break;
             case IPHeader.UDP:
-                // 转发DNS数据包：
                 UDPHeader udpHeader = m_UDPHeader;
+                // 转发UDP数据
+                // m_UdpProxyServer.HandleUdpPacket(ipHeader, udpHeader);
+                // 添加端口映射
+                int portKey = udpHeader.getSourcePort();
+                NatSession session = NatSessionManager.getSession(portKey);
+                if (session == null || session.RemoteIP != ipHeader.getDestinationIP() || session.RemotePort != udpHeader.getDestinationPort()) {
+                    session = NatSessionManager.createSession(portKey, ipHeader.getDestinationIP(), udpHeader.getDestinationPort());
+                }
+
+                session.LastNanoTime = System.nanoTime();
+                session.PacketSent++;//注意顺序
+
+                int udpDataSize = udpHeader.getTotalLength() - 8;
+
+                // 转发给本地UDP服务器
+                ipHeader.setSourceIP(ipHeader.getDestinationIP());
+                ipHeader.setDestinationIP(LOCAL_IP);
+                udpHeader.setDestinationPort(m_TcpProxyServer.Port);
+
+                CommonMethods.ComputeUDPChecksum(ipHeader, udpHeader);
+                m_VPNOutputStream.write(ipHeader.m_Data, ipHeader.m_Offset, size);
+                session.BytesSent += udpDataSize;//注意顺序
+                m_SentBytes += size;
+                // 转发DNS数据包：
                 udpHeader.m_Offset = ipHeader.getHeaderLength();
                 if (ipHeader.getSourceIP() == LOCAL_IP && udpHeader.getDestinationPort() == 53) {
                     m_DNSBuffer.clear();
